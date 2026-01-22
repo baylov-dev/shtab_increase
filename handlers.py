@@ -21,7 +21,8 @@ from config import ADMIN_IDS, TIMEZONE
 from database import (
     get_all_topics, add_reminder, delete_reminder, get_reminders, 
     get_setting, set_setting,
-    get_stats, toggle_reminder_status, log_task_completion
+    get_stats, toggle_reminder_status, log_task_completion,
+    set_topic_name
 )
 from scheduler_service import add_reminder_to_scheduler, reload_scheduler, scheduler
 
@@ -171,6 +172,24 @@ async def cmd_bind(message: Message):
     await message.answer(f"✅ Группа успешно привязана!\n`ID: {message.chat.id}`", parse_mode=PARSE_MODE)
     logger.info(f"Admin bound the bot to chat {message.chat.id}")
 
+@router.message(Command("topicname"))
+async def cmd_topicname(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    if message.chat.type not in ["group", "supergroup"]:
+        return
+    thread_id = getattr(message, "message_thread_id", None)
+    if not isinstance(thread_id, int) or thread_id <= 0:
+        await message.answer("❌ Используйте команду внутри нужного топика.\nПример: `/topicname Закупки`", parse_mode=PARSE_MODE)
+        return
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await message.answer("❌ Укажите название.\nПример: `/topicname Закупки`", parse_mode=PARSE_MODE)
+        return
+    name = parts[1].strip()
+    await set_topic_name(thread_id, name)
+    await message.answer(f"✅ Название сохранено: `{thread_id}` — **{name}**", parse_mode=PARSE_MODE)
+
 @router.callback_query(AdminCB.filter(F.act == "main"))
 async def back_to_main(callback: CallbackQuery, state: FSMContext):
     """Returns the UI to the main dashboard menu."""
@@ -236,7 +255,8 @@ async def topics_menu(callback: CallbackQuery):
         lines.append(f"• `{tid}` — {name}")
     text = (
         "📂 **Список топиков**\n\n"
-        "Это список топиков, которые бот сохранил в своей базе.\n\n"
+        "Это список топиков, которые бот сохранил в своей базе.\n"
+        "Если видите `Топик N`, задайте имя командой `/topicname Название` внутри нужного топика.\n\n"
         + ("\n".join(lines) if lines else "_Пусто_")
     )
 
