@@ -12,7 +12,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN
 from handlers import router
-from database import init_db
+from database import init_db, add_topic_if_not_exists, set_topic_name
 from scheduler_service import scheduler, load_reminders
 
 # --- Configuration & Logging ---
@@ -37,6 +37,17 @@ async def global_logging_middleware(handler, event, data):
         elif event.callback_query:
             update_info = f"Callback from {event.callback_query.from_user.id}: {event.callback_query.data}"
         logger.info(f"Incoming Update: {update_info}")
+        if event.message and event.message.chat and event.message.chat.type == "supergroup":
+            thread_id = getattr(event.message, "message_thread_id", None)
+            if isinstance(thread_id, int) and thread_id > 0:
+                forum_created = getattr(event.message, "forum_topic_created", None)
+                forum_edited = getattr(event.message, "forum_topic_edited", None)
+                if forum_created and getattr(forum_created, "name", None):
+                    await set_topic_name(thread_id, str(forum_created.name))
+                elif forum_edited and getattr(forum_edited, "name", None):
+                    await set_topic_name(thread_id, str(forum_edited.name))
+                else:
+                    await add_topic_if_not_exists(thread_id, f"Топик {thread_id}")
     try:
         return await handler(event, data)
     except TelegramBadRequest as e:
