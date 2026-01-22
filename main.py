@@ -8,6 +8,7 @@ import asyncio
 import logging
 import sys
 from aiogram import Bot, Dispatcher, types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN
 from handlers import router
@@ -36,7 +37,12 @@ async def global_logging_middleware(handler, event, data):
         elif event.callback_query:
             update_info = f"Callback from {event.callback_query.from_user.id}: {event.callback_query.data}"
         logger.info(f"Incoming Update: {update_info}")
-    return await handler(event, data)
+    try:
+        return await handler(event, data)
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e):
+            return
+        raise
 
 async def main():
     """Main execution point for the bot."""
