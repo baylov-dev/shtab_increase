@@ -61,6 +61,47 @@ async def _edit_or_answer(target: Message | CallbackQuery, text: str, reply_mark
     except Exception:
         await message.answer(text, reply_markup=reply_markup, parse_mode=PARSE_MODE)
 
+def _chat_id_to_c_id(chat_id: int) -> str:
+    s = str(chat_id)
+    if s.startswith("-100"):
+        return s[4:]
+    if s.startswith("-"):
+        return s[1:]
+    return s
+
+def _safe_md_link_label(label: str) -> str:
+    return (
+        str(label)
+        .replace("[", "")
+        .replace("]", "")
+        .replace("`", "")
+    )
+
+async def _auto_link_topics(text: str, chat_id: int) -> str:
+    try:
+        topics = await get_all_topics()
+    except Exception:
+        return text
+    c_id = _chat_id_to_c_id(chat_id)
+    items: list[tuple[str, str]] = []
+    for tid, name in topics:
+        try:
+            tid_i = int(tid)
+        except Exception:
+            continue
+        if tid_i <= 1:
+            continue
+        name_s = str(name or "").strip()
+        if not name_s or name_s.startswith("Топик "):
+            continue
+        url = f"https://t.me/c/{c_id}/{tid_i}"
+        items.append((name_s, f"[{_safe_md_link_label(name_s)}]({url})"))
+    items.sort(key=lambda x: len(x[0]), reverse=True)
+    for needle, repl in items:
+        if needle in text and repl not in text:
+            text = text.replace(needle, repl)
+    return text
+
 
 class AdminCB(CallbackData, prefix="adm"):
     act: str # action
@@ -1145,6 +1186,8 @@ async def on_user_join(event: ChatMemberUpdated, bot: Bot):
     
     template = await get_setting("welcome_text", "Привет, {name}! 👋")
     text = template.replace("{name}", full_name)
+    if event.chat.type == "supergroup":
+        text = await _auto_link_topics(text, chat_id)
     
     try:
         thread_id_raw = await get_setting("welcome_thread_id", "1")
