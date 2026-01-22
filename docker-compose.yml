@@ -1,0 +1,12 @@
+name: incrishtabbot
+
+services:
+  bot:
+    build: .
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Almaty
